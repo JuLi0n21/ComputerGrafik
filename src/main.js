@@ -18,11 +18,14 @@ import { RRTStar } from "./rrtstar";
 
 let camera, scene, renderer, loader, stats, statsMesh, raycaster, controls, dolly;
 
+let thirdPersonCamera;
 let INTERSECTED;
 const intersected = [];
 const tempMatrix = new THREE.Matrix4();
 let room;
 
+// BACK FACE CULLING EINFUEGEN FUER DEN HINTERGRUND
+// Wuerfel auch hintergrund geben. 
 // Initialize gamepad variables
 let gamepad;
 let gamepadAxes;
@@ -50,6 +53,13 @@ function init() {
 
   scene.background = new THREE.Color(0x505050);
 
+  thirdPersonCamera = new THREE.PerspectiveCamera(
+    50,
+    window.innerWidth / window.innerHeight,
+    0.001,
+    1000
+  );
+
   camera = new THREE.PerspectiveCamera(
     50,
     window.innerWidth / window.innerHeight,
@@ -76,34 +86,38 @@ function init() {
   renderer.setPixelRatio(window.devicePixelRatio);
   renderer.setSize(window.innerWidth, window.innerHeight);
   renderer.xr.enabled = true;
-  renderer.xr.setReferenceSpaceType("local");
+  renderer.xr.setReferenceSpaceType("local-floor");
   document.body.appendChild(renderer.domElement);
 
   //
 
   document.body.appendChild(VRButton.createButton(renderer));
 
-  dolly = new THREE.Object3D();
+  /* dolly = new THREE.Object3D();
   dolly.position.set(0,1.6,0);
   dolly.add ( camera)
   scene.add( dolly )
 
   const dummyCam = new THREE.Object3D( dolly )
   camera.add ( dummyCam );
-  
+  thirdPersonCamera.add (dummyCam); 
   // Orbit controls for no-vr
-
-  controls = new OrbitControls(camera, renderer.domElement);
-  camera.position.set(0, 5, 10);
+*/
+  controls = new OrbitControls(thirdPersonCamera, renderer.domElement);
+  
+    camera.position.set(0,5,10);
   controls.target = new THREE.Vector3(0,2.5,0);
 
   vrControl = VRControl(renderer);
 
   //handle controller 1
 
-  dolly.add(vrControl.controllerGrips[0], vrControl.controllers[0]);
 
-  //select button
+ // dolly.add(vrControl.controllerGrips[0], vrControl.controllers[0]);
+ 
+ scene.add(vrControl.controllerGrips[0], vrControl.controllers[0]);
+  
+    //select button
   vrControl.controllers[0].addEventListener("select", (event) => {
     console.log(event);
   });
@@ -131,8 +145,8 @@ function init() {
   });
 
   //handle controller 2
-  dolly.add(vrControl.controllerGrips[1], vrControl.controllers[1]);
-
+//  dolly.add(vrControl.controllerGrips[1], vrControl.controllers[1]);
+    scene.add(vrControl.controllerGrips[1], vrControl.controllers[1]);
   //select button
   vrControl.controllers[1].addEventListener("select", (event) => {
     console.log(event);
@@ -142,7 +156,7 @@ function init() {
     console.log(vrControl.controllers[1].userData)
     let pos = new THREE.Vector3;
     pos.copy(vrControl.controllers[1].position);
-    pos.y += dolly.position.y;
+   //  pos.y += dolly.position.y;
     positionBeforePress.copy(pos);
 
   });
@@ -150,7 +164,7 @@ function init() {
     vrControl.controllers[1].userData.selected = false;
     let pos = new THREE.Vector3;
     pos.copy(vrControl.controllers[1].position);
-    pos.y += dolly.position.y;
+   //  pos.y += dolly.position.y;
     Convert2postobox(positionBeforePress, pos);
   });
   //squezze button
@@ -197,7 +211,7 @@ function init() {
  
   const obst3 = new THREE.Mesh(new THREE.CylinderGeometry(1, 1, 5, 32), new THREE.MeshStandardMaterial({ color: 0x00ff00, side: THREE.DoubleSide, transparent: true, opacity: 0.5 }))
   obst3.position.set(-1.5,2.5,1);
-  obst3.updateMatrixWorld();
+  obst3.updateMatrixWorld()
   obsticals.add(obst3)
 
   const box = new THREE.Mesh(new THREE.BoxGeometry(2,2,2), new THREE.MeshStandardMaterial({ color: 0x00ff00, side: THREE.DoubleSide, transparent: true, opacity: 0.5 }))
@@ -248,7 +262,7 @@ function handlecontrollers(controller) {
   if (controller.userData.selected) {
     let pos = new THREE.Vector3;
     pos.copy(vrControl.controllers[1].position);
-    pos.y += dolly.position.y;
+  //  pos.y += dolly.position.y;
     Objectplacementindicator(positionBeforePress, pos);
   }
 }
@@ -429,9 +443,33 @@ function render() {
 
   stats.update();
   controls.update();
-  renderer.render(scene, camera);
 
+renderer.render(scene, thirdPersonCamera);
+// ... then conditionally render the spectator view
+if (renderer.xr.isPresenting){
+    // Copy the XR Camera's position and rotation, but use your
+    // main camera's projection matrix
+   /* 
+    const xrCam = renderer.xr.getCamera(camera);
+    thirdPersonCamera.projectionMatrix.copy(camera.projectionMatrix);
+    thirdPersonCamera.position.copy(xrCam.position);
+    thirdPersonCamera.quaternion.copy(xrCam.quaternion);
+    */
+    // we'll restore this later
+    const currentRenderTarget = renderer.getRenderTarget();
+
+    // turn off the WebXR rendering
+    renderer.xr.isPresenting = false;
+
+    // render to the canvas on our main display
+    renderer.setRenderTarget(null);
+    renderer.render(scene, camera);
+
+    // reset back to enable WebXR
+    renderer.setRenderTarget(currentRenderTarget);
+    renderer.xr.isPresenting = true;
+}
 
  // console.log(clock.getDelta())
-
+renderer.setScissorTest(false);
 }
