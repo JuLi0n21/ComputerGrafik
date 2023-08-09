@@ -40,7 +40,7 @@ export function algoGUI(scene, obsticals) {
     });
 
     const text = new ThreeMeshUI.Text({
-        content: 'The spiny bush viper is known for its extremely keeled dorsal scales.'
+        content: 'Waehle Geometry.'
     });
 
     textBlock.add(text);
@@ -118,7 +118,6 @@ export function algoGUI(scene, obsticals) {
         scene.remove(rrtcanvas);
         rrtcanvas = new THREE.Group;
      
-        
 
         if(id == 0) {
             const start = [-1, 2, 3];
@@ -130,7 +129,8 @@ export function algoGUI(scene, obsticals) {
             const rrt = new RRT(start, goal, obsticals, maxStepSize, maxStepCount, range, rrtcanvas);
             
            // rrt.visulize();
-           rrt.addNodes(100); 
+           rrt.addNodes(1000); 
+           currentshit = rrt;
            console.log("Startign RRT")
             
             scene.add(rrtcanvas);
@@ -260,6 +260,7 @@ export function algoGUI(scene, obsticals) {
                if(currentshit) {
                 
                 rrtcanvas.clear();
+                
                 addpoints();
                 
                }

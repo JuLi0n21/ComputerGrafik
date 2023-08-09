@@ -1,7 +1,7 @@
 /*
 	Job: creating the VR controllers and their pointers
 */
-
+import { OBB } from 'three/examples/jsm/math/OBB'
 import * as THREE from 'three';
 import { XRControllerModelFactory } from 'three/examples/jsm/webxr/XRControllerModelFactory.js';
 
@@ -12,7 +12,25 @@ export default function VRControl( renderer ) {
 
 	const controllerModelFactory = new XRControllerModelFactory();
 
-	//////////////////
+    //////////////////
+        // Bounding helpers
+    //////////////////
+	const size = new THREE.Vector3(0.1,0.1,0.1);
+
+         const hitbox = new THREE.Mesh(new THREE.BoxGeometry(size.x ,size.y ,size.z ),
+            new THREE.MeshStandardMaterial({ color: 0x00ff00, side: THREE.DoubleSide, transparent: true, opacity: 0.5 }))
+
+//    hitbox.position.set(0, 0,0.08);
+    hitbox.updateMatrixWorld;
+
+    const Boundingbox = new THREE.BoxHelper(
+        hitbox ,
+        0xff0032       
+    );
+
+    Boundingbox.renderOrder = Infinity;
+
+    //////////////////
 	// Lines helpers
 	//////////////////
 
@@ -121,11 +139,15 @@ export default function VRControl( renderer ) {
 
 		const ray = linesHelper.clone();
 		const point = pointer.clone();
+        const box = hitbox.clone();
 
-		controller.add( ray, point );
+        controller.add( ray, point,Boundingbox );
 		controller.ray = ray;
 		controller.point = point;
 		controller.userData.selected = undefined;
+		controller.hitbox = box;
+        controller.obb = new OBB();
+         controller.obb.halfSize.copy( size ).multiplyScalar( 0.5 ); 
 
 	} );
 
@@ -169,13 +191,22 @@ export default function VRControl( renderer ) {
 
 	}
 
+    function setBoundingboxAt( controllerID, vec ){
+        const controller = controller[ controllerID ];
+        const localVec = controller.worldToLocal( vec );
+        
+        controller.box.position.copy( localVec );
+        controller.box.visible = true;
+    }
+
 	//
 
 	return {
 		controllers,
 		controllerGrips,
 		setFromController,
-		setPointerAt
+		setPointerAt,
+        setBoundingboxAt
 	};
 
 }

@@ -15,8 +15,10 @@ import { algoGUI, updateButtons } from "./threegui";
 import VRControl from "./utils/VRControl.js";
 import { RRT } from "./rrt";
 import { RRTStar } from "./rrtstar";
+import { OBB } from 'three/examples/jsm/math/OBB'
 
-let camera, scene, renderer, loader, stats, statsMesh, raycaster, controls, dolly;
+
+let camera, scene, renderer, loader, stats, statsMesh, raycaster, controls, dolly, hitbox;
 
 let thirdPersonCamera;
 let INTERSECTED;
@@ -33,13 +35,15 @@ let controller1, controller2;
 let controllerGrip1, controllerGrip2;
 let obsticals, obsticalhitboxes ,vrControl;
 let positionBeforePress = new THREE.Vector3();
-
+let Boundingbox;
 let rrt;
 
 const clock = new THREE.Clock();
 
 init();
 animate();
+
+
 
 function init() {
   raycaster = new THREE.Raycaster();
@@ -104,7 +108,9 @@ function init() {
   // Orbit controls for no-vr
 */
   controls = new OrbitControls(thirdPersonCamera, renderer.domElement);
-  
+ 
+    thirdPersonCamera.position.set(0,5,10);
+    thirdPersonCamera.lookAt(0,2.5,0);
     camera.position.set(0,5,10);
   controls.target = new THREE.Vector3(0,2.5,0);
 
@@ -130,6 +136,16 @@ function init() {
 
   //squezze button
   vrControl.controllers[0].addEventListener("squeezestart", (event) => {
+    const obj = getIntersections(vrControl.controllers[0]);
+    if (obj[0]!= null) {
+      console.log( obj[0]);
+      obj[0].object.position.copy(vrControl.controllers[0].position)
+      obj[0].object.scale.x = 0.1;
+      obj[0].object.scale.y = 0.1;
+      obj[0].object.scale.z = 0.1;
+      vrControl.controllers[0].userData.object = obj[0].object;
+      console.log( obj[0],vrControl.controllers[0].userData.object);
+    }
     console.log(event);
   });
 
@@ -137,6 +153,14 @@ function init() {
     console.log(event);
   });
   vrControl.controllers[0].addEventListener("squeezeend", (event) => {
+    if(vrControl.controllers[0].userData.object){
+    vrControl.controllers[0].userData.object.position.copy(vrControl.controllers[0].position);
+
+    vrControl.controllers[0].userData.object.scale.x = 1;
+    vrControl.controllers[0].userData.object.scale.y = 1;
+    vrControl.controllers[0].userData.object.scale.z = 1;
+
+    vrControl.controllers[0].userData.object = undefined;}
     console.log(event);
   });
   //else
@@ -199,7 +223,7 @@ function init() {
   obsticalhitboxes = new THREE.Group();
   obsticals = new THREE.Group();
 
-  const obst = new THREE.Mesh(new THREE.CylinderGeometry(0.6, 0.6, 0.2 ,32), new THREE.MeshStandardMaterial({ color: 0x00ff00, side: THREE.DoubleSide }))
+  const obst = new THREE.Mesh(new THREE.CylinderGeometry(0.6, 0.6, 0.2 ,32), new THREE.MeshStandardMaterial({ color: 0xffffff * Math.random(), side: THREE.DoubleSide }))
   obst.position.set(2,0.1,2);
   obst.updateMatrixWorld();
   obsticals.add(obst)
@@ -209,16 +233,7 @@ function init() {
   obst2.updateMatrixWorld();
   obsticals.add(obst2)
  
-  const obst3 = new THREE.Mesh(new THREE.CylinderGeometry(1, 1, 5, 32), new THREE.MeshStandardMaterial({ color: 0x00ff00, side: THREE.DoubleSide, transparent: true, opacity: 0.5 }))
-  obst3.position.set(-1.5,2.5,1);
-  obst3.updateMatrixWorld()
-  obsticals.add(obst3)
-
-  const box = new THREE.Mesh(new THREE.BoxGeometry(2,2,2), new THREE.MeshStandardMaterial({ color: 0x00ff00, side: THREE.DoubleSide, transparent: true, opacity: 0.5 }))
-  box.position.set(0,1,0);
-  box.updateMatrixWorld();
- // obsticals.add(obst)
-  //obsticals.add(box)
+  generateObsticals(1);
   
    scene.add(obsticals)
   algoGUI(scene, obsticals);
@@ -232,7 +247,7 @@ function init() {
   const maxStepCount = 1000;
   const range = 6;
 
-   rrt = new RRT(start, goal, obsticals, maxStepSize, maxStepCount, range, rrtcanvas);
+  rrt = new RRT(start, goal, obsticals, maxStepSize, maxStepCount, range, rrtcanvas);
 
   // rrt.findPath();
   
@@ -254,24 +269,44 @@ function init() {
   // rrtstar.visualize();
 
   scene.add(rrtcanvas);
- 
+
+	const size = new THREE.Vector3(0.1,0.1,0.1);
+
+         hitbox = new THREE.Mesh(new THREE.BoxGeometry(size.x ,size.y ,size.z ),
+            new THREE.MeshStandardMaterial({ color: 0x00ff00, side: THREE.DoubleSide, transparent: true, opacity: 0.5 }))
+
+  //  hitbox.position.set(0, 0,0.08);
+    hitbox.updateMatrixWorld;
+
+    Boundingbox = new THREE.BoxHelper(
+        hitbox ,
+        0xff0032       
+    );
+
+    Boundingbox.renderOrder = Infinity;
+    scene.add(hitbox); 
 }
 
 function handlecontrollers(controller) {
-  //console.log(controller.userData);
+ // console.log(controller);
   if (controller.userData.selected) {
     let pos = new THREE.Vector3;
-    pos.copy(vrControl.controllers[1].position);
+    pos.copy(controller.position);
   //  pos.y += dolly.position.y;
     Objectplacementindicator(positionBeforePress, pos);
   }
+    aabbintersections(vrControl.controllers[0]);
+    obbintersections(vrControl.controllers[1]);
 }
 
 function onWindowResize() {
-  camera.aspect = window.innerWidth / window.innerHeight;
-  camera.updateProjectionMatrix();
+    camera.aspect = window.innerWidth / window.innerHeight;
+    thirdPersonCamera.aspect = window.innerWidth / window.innerHeight;
+    thirdPersonCamera.updateProjectionMatrix();
 
-  renderer.setSize(window.innerWidth, window.innerHeight);
+    camera.updateProjectionMatrix();
+
+    renderer.setSize(window.innerWidth, window.innerHeight);
 }
 
 function intersectObjects(controller) {
@@ -295,8 +330,162 @@ function intersectObjects(controller) {
     intersected.push(object);
   } else {
 
+
   }
 }
+
+function obbintersections(controller){ 
+
+    obsticals.children.forEach(object => {
+        controller.obb.center.set(controller.position.x,controller.position.y,controller.position.z)      
+        //  console.log( object)
+        if(object.geometry.boundingBox)
+        {
+
+
+            if(controller.obb.intersectsBox3(object.geometry.boundingBox)){
+                scene.add(controller.obb.clone());
+                object.visible = false;
+            } else {  
+                object.visible = true;
+            }
+
+        }
+        if(object.geometry.type === "SphereGeometry" && object.geometry.boundingSphere ){
+            let sphere =object.geometry.boundingSphere;
+            sphere.center.copy(object.position);
+            //console.log(sphere); 
+            if(controller.obb.intersectsSphere(sphere)){
+
+              //  console.log(controller.obb)
+                object.visible = false;
+            } else {  
+                object.visible = true;
+            }}   else if(object.geometry.type === "CylinderGeometry"){
+           //   console.log(controller.obb)
+            //  console.log(object.geometry)
+
+              const radius = object.geometry.parameters.radiusTop;
+              let start = object.position.clone();
+              let end = object.position.clone();
+              end.y += object.geometry.parameters.height / 2;
+              start.y -= object.geometry.parameters.height / 2;
+              const normalizedCylinderAxis = end.clone().sub(start).normalize();
+
+            //  console.log((doesCylinderIntersectOBB(radius,start,end,normalizedCylinderAxis,controller.obb.center,controller.obb.halfSize,controller.obb.rotation)))
+             if(doesCylinderIntersectOBB(radius,start,end,normalizedCylinderAxis,controller.obb.center,controller.obb.halfSize,controller.obb.rotation)){
+                object.visible = false;
+              } else {  
+                  object.visible = true;
+            }
+            
+          }
+        
+
+        })
+    }
+
+    let helper;
+function aabbintersections(controller) {
+
+    controller.updateMatrixWorld();
+    const bb = controller.hitbox.geometry.boundingBox
+    const min = bb.min.clone();
+    const max = bb.max.clone();
+    min.add(controller.position)
+      max.add(controller.position)
+   const geometry = new THREE.BufferGeometry().setFromPoints([min, max ]);
+
+    const line = new THREE.Line( geometry,new THREE.LineBasicMaterial({
+        color: 0x0000ff
+    }));
+    let check = new THREE.Box3(); 
+    check.max = max;
+    check.min = min;
+ 
+
+    obsticals.children.forEach(object => {
+        //  console.log( object)
+        if(object.geometry.boundingBox)
+        {
+
+         
+            if(object.geometry.boundingBox.intersectsBox(check)){
+                console.log(check,);   if(helper){
+                  scene.remove(helper)}
+                  helper = new THREE.Box3Helper( check, 0xffff00 );
+
+                scene.add( helper );
+    
+               helper.position.copy(controller.position)
+                const help= new THREE.Box3Helper(object.geometry.boundingBox , 0xffff00 );
+                scene.add( help );
+                     
+                } 
+
+        }else if(object.geometry.type === "SphereGeometry" && object.geometry.boundingSphere){
+                  if(object.geometry.boundingSphere.intersectsBox(check)){
+                console.log(check,);   if(helper){
+                  scene.remove(helper)}
+                  helper = new THREE.Box3Helper( check, 0xffff00 );
+
+                scene.add( helper );}
+                }
+                else if(object.geometry.type === "CylinderGeometry"){
+
+                    const radius = object.geometry.parameters.radiusTop;
+                    let start = object.position.clone();
+                    let end = object.position.clone();
+                    end.y += object.geometry.parameters.height / 2;
+                    start.y -= object.geometry.parameters.height / 2;
+                    const normalizedCylinderAxis = end.clone().sub(start).normalize();
+                    
+                  if(doesCylinderIntersectAABB(radius,start,end,normalizedCylinderAxis,min,max)){
+                    //console.log(radius,start,end,normalizedCylinderAxis,min,max);
+                  if(helper){
+                  scene.remove(helper)}
+                  helper = new THREE.Box3Helper( check, 0xffff00 );
+
+                scene.add( helper );}
+                }
+    })
+
+   //console.log(bb, min, max);
+}
+
+function doesCylinderIntersectAABB(cylinderRadius, cylinderStartPoint, cylinderEndPoint, normalizedCylinderAxis, aabbMin, aabbMax) {
+  // Find the point on the AABB closest to the cylinder's start point
+ // console.log(cylinderRadius,cylinderStartPoint,cylinderEndPoint,normalizedCylinderAxis,aabbMin,aabbMax)
+  const closestPointOnAABB = new THREE.Vector3(
+      Math.max(aabbMin.x, Math.min(cylinderStartPoint.x, aabbMax.x)),
+      Math.max(aabbMin.y, Math.min(cylinderStartPoint.y, aabbMax.y)),
+      Math.max(aabbMin.z, Math.min(cylinderStartPoint.z, aabbMax.z))
+  );
+  
+  // Calculate the vector between the cylinder's start point and the closest point on the AABB
+  const vectorToClosestPoint = closestPointOnAABB.clone().sub(cylinderStartPoint);
+  
+  // Calculate the projection of the vector onto the normalized cylinder axis
+  const projection = vectorToClosestPoint.dot(normalizedCylinderAxis);
+  
+  // Check if the projection lies within the cylinder's height
+  if (projection >= 0 && projection <= cylinderEndPoint.distanceTo(cylinderStartPoint)) {
+      // Check if the distance from the projection point to the axis is within the cylinder's radius
+      const distanceToAxis = vectorToClosestPoint
+          .sub(normalizedCylinderAxis.clone().multiplyScalar(projection))
+          .length();
+      
+      if (distanceToAxis <= cylinderRadius) {
+          return true; // Collision detected
+      }
+  }
+  
+  return false; // No collision detected
+}
+
+function doesCylinderIntersectOBB(cylinderRadius, cylinderStartPoint, cylinderEndPoint, normalizedCylinderAxis, obbCenter, obbHalfExtents, obbAxes) {
+}
+
 
 function getIntersections(controller) {
   controller.updateMatrixWorld();
@@ -421,6 +610,33 @@ const throttleFunc = throttle(
 	{ noLeading: false, noTrailing: false }
 );
 
+export function generateObsticals(amount){
+  console.log(1);
+  for (let i=0; i<amount; i++){
+    
+     const obst3 = new THREE.Mesh(new THREE.CylinderGeometry(1, 1, 5, 32), new THREE.MeshStandardMaterial({ color: Math.random() * 0xffffff, side: THREE.DoubleSide, transparent: true, opacity: 0.5 }))
+  obst3.position.set(-1.5,2.5,1);
+  obst3.updateMatrixWorld()
+  obsticals.add(obst3)
+
+    const obst4 = new THREE.Mesh(new THREE.SphereGeometry((Math.random() * 0.5) + 0.5) , new THREE.MeshStandardMaterial({ color: Math.random() * 0xfffff, side: THREE.DoubleSide, transparent: true, opacity: 0.5 }))
+  obst4.position.set( (Math.random() * 2) ,(Math.random() * 2) ,(Math.random() * 3) - 1.5);
+  obst4.updateMatrixWorld()
+  obsticals.add(obst4)
+
+    
+  const boxgeo = new THREE.BoxGeometry(Math.random() *0.2,Math.random() *2,Math.random() *2)
+boxgeo.computeBoundingBox()
+  const box = new THREE.Mesh(boxgeo, new THREE.MeshStandardMaterial({ color: Math.random() * 0xffffff, side: THREE.DoubleSide, transparent: true, opacity: 0.5 }))
+     box.updateMatrix()
+   boxgeo.translate(Math.random() * 1, 2, Math.random() * 1);
+ box.updateMatrixWorld()
+
+  obsticals.add(box)
+}
+    
+  }
+
 
 function animate() {
   renderer.setAnimationLoop(render);
@@ -428,18 +644,27 @@ function animate() {
 
 let time = 0;
 function render() {
+  //  console.log(Boundingbox);
+//console.log(vrControl.controllers[0]);
 
-  time += clock.getDelta();
+
+    hitbox.position.set(vrControl.controllers[0].position.x,
+        vrControl.controllers[0].position.y,
+        vrControl.controllers[0].position.z);
+            
+   time += clock.getDelta();
   ThreeMeshUI.update();
   cleanIntersected();
   updateButtons(renderer, vrControl, 0);
+    updateButtons(renderer, vrControl, 1);
   // updateButtons(renderer, vrControl, 1);
   intersectObjects(vrControl.controllers[0]);
   intersectObjects(vrControl.controllers[1]);
+  handlecontrollers(vrControl.controllers[0]);
   handlecontrollers(vrControl.controllers[1]);
   // UpdateVrControl(vrControl.controllers[1])
   
-   throttleFunc();
+  // throttleFunc();
 
   stats.update();
   controls.update();
